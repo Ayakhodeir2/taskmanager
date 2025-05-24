@@ -8,7 +8,7 @@ const awsconfig = {
     region: 'eu-north-1',
     userPoolId: 'eu-north-1_9V34i4Lht',
     userPoolWebClientId: '186abjvi5krvchetqsftmno8ol',
-    userPoolClientSecret: 'YOUR_CLIENT_SECRET', // Replace with actual secret
+    userPoolClientSecret: '1sung7jnosv3sp12bilgtl5m4c3dbve0ga3b4gbisl2m2bfogt39',
   },
 };
 
@@ -177,7 +177,7 @@ const CreateTask = () => {
             method: 'PUT',
             body: file,
             headers: {
-              'Content-Type': file.type || 'application/octet-stream',
+              'Content-Type': file.type || 'application/octet-stream',  // Use file's actual type
             },
           });
           if (!uploadResponse.ok) {
