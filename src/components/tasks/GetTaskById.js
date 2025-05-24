@@ -1,68 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import '../../styles/theme.css';
 import '../../global.css';
 
 const GetTaskById = () => {
   const [taskId, setTaskId] = useState('');
   const [task, setTask] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
   const getAuthToken = () => {
     const lastUserKey = 'CognitoIdentityServiceProvider.186abjvi5krvchetqsftmno8ol.LastAuthUser';
     const lastUser = localStorage.getItem(lastUserKey);
-    if (!lastUser) return null;
 
-    const tokenKey = `CognitoIdentityServiceProvider.186abjvi5krvchetqsftmno8ol.${lastUser}.idToken`;
-    return localStorage.getItem(tokenKey);
+    if (!lastUser) {
+      return null;
+    }
+
+    const clientId = '186abjvi5krvchetqsftmno8ol';
+    const tokenKey = `CognitoIdentityServiceProvider.${clientId}.${lastUser}.idToken`;
+    const accessTokenKey = `CognitoIdentityServiceProvider.${clientId}.${lastUser}.accessToken`;
+
+    return localStorage.getItem(tokenKey) || localStorage.getItem(accessTokenKey);
   };
 
   const checkTokenExpiration = () => {
     const clientId = '186abjvi5krvchetqsftmno8ol';
     const lastUserKey = `CognitoIdentityServiceProvider.${clientId}.LastAuthUser`;
     const lastUser = localStorage.getItem(lastUserKey);
+
     if (!lastUser) return true;
 
     const expKey = `CognitoIdentityServiceProvider.${clientId}.${lastUser}.tokenExpiration`;
     const expiration = localStorage.getItem(expKey);
-    return expiration && new Date().getTime() > parseInt(expiration);
-  };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Not specified';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return expiration && new Date().getTime() > parseInt(expiration) * 1000;
   };
 
   const fetchTask = async () => {
-    setLoading(true);
-    setError(null);
     try {
       if (checkTokenExpiration()) {
         throw new Error('Session expired. Please login again');
       }
 
       const token = getAuthToken();
-      console.log('Token used:', token);
       if (!token) {
         throw new Error('Please login first');
-      }
-
-      if (!taskId) {
-        throw new Error('Please enter a task ID');
       }
 
       const response = await fetch(
         `https://cl51yhgxi8.execute-api.eu-north-1.amazonaws.com/prod/tasks/${taskId}`,
         {
-          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -70,20 +56,17 @@ const GetTaskById = () => {
         }
       );
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
+      if (data.error !== undefined) {
+        setError(data.error);
+        return;
+      }
       setTask(data);
+      setError('');
     } catch (err) {
-      console.log('Error is: ', err);
-      console.error('Error fetching task:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      console.error(err);
+      setError('Task not found or error fetching task.');
+      setTask(null);
     }
   };
 
@@ -91,88 +74,40 @@ const GetTaskById = () => {
     <div className="container">
       <h2>Get Task By ID</h2>
       <input
-        type="text"
+        className="input-primary"
+        placeholder="Enter Task ID"
         value={taskId}
         onChange={(e) => setTaskId(e.target.value)}
-        placeholder="Enter Task ID (e.g., 013c850b-573c-4ee2-ac3b-9460354fd146)"
-        style={{
-          padding: '10px',
-          marginBottom: '15px',
-          width: '300px',
-          border: '1px solid #ddd',
-          borderRadius: '4px',
-          fontSize: '16px',
-        }}
       />
-      <button
-        className="button-primary"
-        onClick={fetchTask}
-        disabled={loading}
-        style={{
-          padding: '10px 20px',
-          marginRight: '10px',
-        }}
-      >
-        {loading ? 'Loading...' : 'Fetch Task'}
-      </button>
-      <button
-        className="button-secondary"
-        onClick={() => {
-          setTaskId('');
-          setTask(null);
-          setError(null);
-        }}
-        style={{
-          padding: '10px 20px',
-        }}
-      >
-        Clear
-      </button>
-      <button
-        className="button-tertiary"
-        onClick={() => {
-          // Add sign-out logic here (e.g., clear localStorage and redirect)
-          console.log('Sign Out clicked');
-        }}
-        style={{
-          padding: '10px 20px',
-          marginTop: '10px',
-        }}
-      >
-        Sign Out
-      </button>
-      <button
-        className="button-tertiary"
-        onClick={() => {
-          // Add authentication check logic here
-          console.log('Check Authentication clicked');
-        }}
-        style={{
-          padding: '10px 20px',
-          marginTop: '10px',
-        }}
-      >
-        Check Authentication
+      <button className="button-primary" onClick={fetchTask}>
+        Fetch Task
       </button>
 
-      {error && <p className="error-message" style={{ color: '#dc3545', marginTop: '15px' }}>{error}</p>}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {task && (
         <div
           className="task-card"
           style={{
-            padding: '15px',
             marginTop: '20px',
-            border: '1px solid #eee',
-            borderRadius: '6px',
+            padding: '20px',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
             backgroundColor: '#f9f9f9',
-            maxWidth: '500px',
           }}
         >
-          <h3 style={{ marginTop: 0 }}>{task.title || 'Untitled Task'}</h3>
-          <p><strong>ID:</strong> {task.TaskID}</p>
-          <p><strong>Description:</strong> {task.description || 'No description'}</p>
-          <p><strong>Status:</strong>
+          <h3 style={{ marginTop: 0 }}>Task Details</h3>
+
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Task ID:</strong> {task.TaskID || 'Not available'}
+          </div>
+
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Description:</strong> {task.description || 'None'}
+          </div>
+
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Status:</strong>
             <span
               style={{
                 color: task.status === 'pending' ? '#d4a017' : '#28a745',
@@ -180,18 +115,28 @@ const GetTaskById = () => {
                 marginLeft: '5px',
               }}
             >
-              {task.status}
+              {task.status || 'Not specified'}
             </span>
-          </p>
-          <p><strong>Created:</strong> {formatDate(task.created_at)}</p>
-          <p><strong>Updated:</strong> {formatDate(task.updated_at)}</p>
+          </div>
 
-          {task.attachments?.length > 0 && (
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Priority:</strong> {task.priority || 'Not specified'}
+          </div>
+
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Due Date:</strong> {task.due_date || 'Not specified'}
+          </div>
+
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Created At:</strong> {task.created_at || 'Not specified'}
+          </div>
+
+          {task.attachments && task.attachments.length > 0 && (
             <div>
               <strong>Attachments:</strong>
-              <ul style={{ paddingLeft: '20px' }}>
-                {task.attachments.map((attachment, idx) => (
-                  <li key={idx}>{attachment.file_name}</li>
+              <ul style={{ marginTop: '5px', paddingLeft: '20px' }}>
+                {task.attachments.map((attachment, index) => (
+                  <li key={index}>{attachment.file_name || 'Unnamed'}</li>
                 ))}
               </ul>
             </div>

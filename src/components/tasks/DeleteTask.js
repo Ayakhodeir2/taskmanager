@@ -153,8 +153,7 @@ const DeleteTask = () => {
         onChange={(e) => setTaskId(e.target.value)}
       />
       <button className="button-primary" onClick={deleteTask}>Delete</button>
-      <button className="button-primary" onClick={handleSignOut}>Sign Out</button>
-      <button className="button-primary" onClick={checkUser}>Check Authentication</button>
+  
       {message && <p>{message}</p>}
     </div>
   );
