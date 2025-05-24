@@ -257,8 +257,7 @@ const UpdateTask = () => {
       <input type="file" multiple onChange={handleFileChange} />
 
       <button className="button-primary" onClick={updateTask}>Update</button>
-      <button className="button-primary" onClick={handleSignOut}>Sign Out</button>
-      <button className="button-primary" onClick={checkUser}>Check Authentication</button>
+  
 
       {message && <p>{message}</p>}
     </div>

@@ -270,12 +270,7 @@ const CreateTask = () => {
       <button className="button-primary" onClick={createTask}>
         Create
       </button>
-      <button className="button-primary" onClick={handleSignOut}>
-        Sign Out
-      </button>
-      <button className="button-primary" onClick={checkUser}>
-        Check Authentication
-      </button>
+
 
       {message && <p>{message}</p>}
     </div>
