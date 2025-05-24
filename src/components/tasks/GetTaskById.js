@@ -1,146 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import '../../styles/theme.css';
 import '../../global.css';
-
-const awsconfig = {
-  Auth: {
-    region: 'eu-north-1',
-    userPoolId: 'eu-north-1_9V34i4Lht',
-    userPoolWebClientId: '186abjvi5krvchetqsftmno8ol',
-    userPoolClientSecret: '1sung7jnosv3sp12bilgtl5m4c3dbve0ga3b4gbisl2m2bfogt39',
-  },
-};
 
 const GetTaskById = () => {
   const [taskId, setTaskId] = useState('');
   const [task, setTask] = useState(null);
-  const [error, setError] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [message, setMessage] = useState('');
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const decodeJwt = (token) => {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      return JSON.parse(jsonPayload);
-    } catch (e) {
-      console.error('JWT decode error:', e);
-      return {};
-    }
+  const getAuthToken = () => {
+    const lastUserKey = 'CognitoIdentityServiceProvider.186abjvi5krvchetqsftmno8ol.LastAuthUser';
+    const lastUser = localStorage.getItem(lastUserKey);
+    if (!lastUser) return null;
+
+    const tokenKey = `CognitoIdentityServiceProvider.186abjvi5krvchetqsftmno8ol.${lastUser}.idToken`;
+    return localStorage.getItem(tokenKey);
   };
 
-  const checkUser = async () => {
-    const prefix = `CognitoIdentityServiceProvider.${awsconfig.Auth.userPoolWebClientId}`;
-    const sub = localStorage.getItem(`${prefix}.sub`);
-    const username = localStorage.getItem(`${prefix}.LastAuthUser`) || 'ayakhodeir2@gmail.com';
-    console.log('checkUser started for sub:', sub, 'username:', username);
+  const checkTokenExpiration = () => {
+    const clientId = '186abjvi5krvchetqsftmno8ol';
+    const lastUserKey = `CognitoIdentityServiceProvider.${clientId}.LastAuthUser`;
+    const lastUser = localStorage.getItem(lastUserKey);
+    if (!lastUser) return true;
 
-    if (!sub || !username) {
-      console.warn('Missing sub or LastAuthUser in localStorage');
-      setIsAuthenticated(false);
-      setMessage('Please sign in to fetch tasks.');
-      navigate('/login');
-      return null;
-    }
+    const expKey = `CognitoIdentityServiceProvider.${clientId}.${lastUser}.tokenExpiration`;
+    const expiration = localStorage.getItem(expKey);
+    return expiration && new Date().getTime() > parseInt(expiration);
+  };
 
-    const idToken = localStorage.getItem(`${prefix}.${username}.idToken`);
-    const tokenExpiration = localStorage.getItem(`${prefix}.${username}.tokenExpiration`);
-    console.log('Stored tokens:', {
-      idToken: idToken?.slice(0, 10),
-      tokenExpiration,
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Not specified';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
-
-    if (!idToken) {
-      console.warn('No idToken in localStorage');
-      setIsAuthenticated(false);
-      setMessage('Please sign in again. Missing authentication token.');
-      navigate('/login');
-      return null;
-    }
-
-    const expirationTime = parseInt(tokenExpiration, 10);
-    const idTokenPayload = decodeJwt(idToken);
-    console.log('Stored IdToken payload:', idTokenPayload);
-
-    if (expirationTime < Date.now() || (idTokenPayload.exp * 1000) < Date.now()) {
-      console.warn('idToken expired');
-      setIsAuthenticated(false);
-      setMessage('Session expired. Please sign in again.');
-      navigate('/login');
-      return null;
-    }
-
-    console.log('User validated with sub:', sub, 'and idToken:', idToken.slice(0, 10));
-    setIsAuthenticated(true);
-    setMessage('User is authenticated');
-
-    return { sub, idToken };
   };
-
-  useEffect(() => {
-    checkUser();
-  }, []);
 
   const fetchTask = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const authData = await checkUser();
-      if (!authData) {
-        setError('Error: Authentication failed. Please sign in again.');
-        setTask(null);
-        return;
+      if (checkTokenExpiration()) {
+        throw new Error('Session expired. Please login again');
       }
 
-      const { idToken } = authData;
-      console.log('Using idToken:', idToken?.slice(0, 10));
+      const token = getAuthToken();
+      console.log('Token used:', token);
+      if (!token) {
+        throw new Error('Please login first');
+      }
 
-      const headers = {
-        'Authorization': `Bearer ${idToken}`,
-      };
+      if (!taskId) {
+        throw new Error('Please enter a task ID');
+      }
 
-      const response = await fetch(`https://cl51yhgxi8.execute-api.eu-north-1.amazonaws.com/prod/tasks/${taskId}`, { // Fixed URL
-        method: 'GET',
-        headers,
-      });
+      const response = await fetch(
+        `https://cl51yhgxi8.execute-api.eu-north-1.amazonaws.com/prod/tasks/${taskId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API error:', errorData);
-        throw new Error(errorData.message || `Failed to fetch task: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
       setTask(data);
-      setError('');
-      setMessage('Task fetched successfully');
     } catch (err) {
-      console.error('Fetch task error:', err, err.stack);
-      const errorMessage = err?.message || JSON.stringify(err) || 'Unknown error';
-      setError('Error fetching task: ' + errorMessage);
-      setTask(null);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      const prefix = `CognitoIdentityServiceProvider.${awsconfig.Auth.userPoolWebClientId}`;
-      const username = localStorage.getItem(`${prefix}.LastAuthUser`) || 'ayakhodeir2@gmail.com'; // Define username
-      localStorage.removeItem(`${prefix}.sub`);
-      localStorage.removeItem(`${prefix}.LastAuthUser`);
-      localStorage.removeItem(`${prefix}.${username}.idToken`);
-      localStorage.removeItem(`${prefix}.${username}.accessToken`);
-      localStorage.removeItem(`${prefix}.${username}.refreshToken`);
-      localStorage.removeItem(`${prefix}.${username}.tokenExpiration`);
-      setIsAuthenticated(false);
-      setMessage('Signed out successfully');
-      navigate('/login');
-    } catch (error) {
-      console.error('Sign out error:', error);
-      setMessage('Error signing out');
+      console.log('Error is: ', err);
+      console.error('Error fetching task:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -148,24 +91,113 @@ const GetTaskById = () => {
     <div className="container">
       <h2>Get Task By ID</h2>
       <input
-        className="input-primary"
-        placeholder="Enter Task ID"
+        type="text"
         value={taskId}
         onChange={(e) => setTaskId(e.target.value)}
+        placeholder="Enter Task ID (e.g., 013c850b-573c-4ee2-ac3b-9460354fd146)"
+        style={{
+          padding: '10px',
+          marginBottom: '15px',
+          width: '300px',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          fontSize: '16px',
+        }}
       />
-      <button className="button-primary" onClick={fetchTask}>Fetch Task</button>
-      <button className="button-primary" onClick={handleSignOut}>Sign Out</button>
-      <button className="button-primary" onClick={checkUser}>Check Authentication</button>
+      <button
+        className="button-primary"
+        onClick={fetchTask}
+        disabled={loading}
+        style={{
+          padding: '10px 20px',
+          marginRight: '10px',
+        }}
+      >
+        {loading ? 'Loading...' : 'Fetch Task'}
+      </button>
+      <button
+        className="button-secondary"
+        onClick={() => {
+          setTaskId('');
+          setTask(null);
+          setError(null);
+        }}
+        style={{
+          padding: '10px 20px',
+        }}
+      >
+        Clear
+      </button>
+      <button
+        className="button-tertiary"
+        onClick={() => {
+          // Add sign-out logic here (e.g., clear localStorage and redirect)
+          console.log('Sign Out clicked');
+        }}
+        style={{
+          padding: '10px 20px',
+          marginTop: '10px',
+        }}
+      >
+        Sign Out
+      </button>
+      <button
+        className="button-tertiary"
+        onClick={() => {
+          // Add authentication check logic here
+          console.log('Check Authentication clicked');
+        }}
+        style={{
+          padding: '10px 20px',
+          marginTop: '10px',
+        }}
+      >
+        Check Authentication
+      </button>
+
+      {error && <p className="error-message" style={{ color: '#dc3545', marginTop: '15px' }}>{error}</p>}
 
       {task && (
-        <div>
-          <h3>Task Details:</h3>
-          <pre>{JSON.stringify(task, null, 2)}</pre>
+        <div
+          className="task-card"
+          style={{
+            padding: '15px',
+            marginTop: '20px',
+            border: '1px solid #eee',
+            borderRadius: '6px',
+            backgroundColor: '#f9f9f9',
+            maxWidth: '500px',
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>{task.title || 'Untitled Task'}</h3>
+          <p><strong>ID:</strong> {task.TaskID}</p>
+          <p><strong>Description:</strong> {task.description || 'No description'}</p>
+          <p><strong>Status:</strong>
+            <span
+              style={{
+                color: task.status === 'pending' ? '#d4a017' : '#28a745',
+                fontWeight: 'bold',
+                marginLeft: '5px',
+              }}
+            >
+              {task.status}
+            </span>
+          </p>
+          <p><strong>Created:</strong> {formatDate(task.created_at)}</p>
+          <p><strong>Updated:</strong> {formatDate(task.updated_at)}</p>
+
+          {task.attachments?.length > 0 && (
+            <div>
+              <strong>Attachments:</strong>
+              <ul style={{ paddingLeft: '20px' }}>
+                {task.attachments.map((attachment, idx) => (
+                  <li key={idx}>{attachment.file_name}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {message && <p>{message}</p>}
     </div>
   );
 };

@@ -28,42 +28,43 @@ const GetAllTasks = () => {
   };
 
   const fetchTasks = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (checkTokenExpiration()) {
-        throw new Error('Session expired. Please login again');
-      }
-
-      const token = getAuthToken();
-      if (!token) {
-        throw new Error('Please login first');
-      }
-
-      const response = await fetch("https://cl51yhgxi8.execute-api.eu-north-1.amazonaws.com/prod/tasks", {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      console.log("Response: ", response);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      // Ensure data is an array before setting it
-      setTasks(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.log("Error is: ", err);
-      console.error('Error fetching tasks:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  setError(null);
+  try {
+    if (checkTokenExpiration()) {
+      throw new Error('Session expired. Please login again');
     }
-  };
+
+    const token = getAuthToken();
+    console.log("Token used:", token);
+    if (!token) {
+      throw new Error('Please login first');
+    }
+
+    const response = await fetch("https://cl51yhgxi8.execute-api.eu-north-1.amazonaws.com/prod/tasks", {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    console.log("Response status:", response.status);
+    console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    setTasks(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.log("Error is: ", err);
+    console.error('Error fetching tasks:', err);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Format date for display
   const formatDate = (dateString) => {
